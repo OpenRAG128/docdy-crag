@@ -8,7 +8,6 @@ google-generativeai
 youtube-transcript-api
 selenium
 rarfile
-patoolib
 markdown 
 reportlab
 
@@ -45,3 +44,4 @@ python-docx
 google-api-python-client>=2.121.0
 
 isodate>=0.6.1
+
