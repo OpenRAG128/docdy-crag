@@ -195,7 +195,7 @@ def create_mindmap_pdf(markdown_content, output_path):
     return output_path
 
 def create_mindmap_markdown(text):
-    """Generate mindmap markdown using Groq AI."""
+    """Generate mindmap markdown using Gemini AI."""
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
@@ -531,7 +531,7 @@ def get_qa_chain():
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
 def get_additional_info(query):
-    """Get additional information from Groq for the query"""
+    """Get additional information from Gemini for the query"""
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
         
@@ -1086,5 +1086,6 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
