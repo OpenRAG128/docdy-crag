@@ -744,15 +744,12 @@ def verify_answer(context, question, initial_answer):
     Corrected Answer: <your improved answer here>
     """
     try:
-        client = Groq(api_key=GROQ_API_KEY)
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="gemma2-9b-it"
-        )
-        return response.choices[0].message.content.strip()
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
         logging.error(f"Verifier error: {e}")
-        return "VALID"
+        return "VALID" # Fallback to VALID on error
 
 def extract_corrected_version(text):
     match = re.search(r"Corrected Answer:\s*(.+)", text, re.DOTALL)
@@ -1089,4 +1086,5 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
