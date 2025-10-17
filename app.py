@@ -23,7 +23,6 @@ from langchain_community.document_loaders import SeleniumURLLoader
 from selenium.common.exceptions import WebDriverException
 import zipfile
 import rarfile
-import patoolib  # For RAR support 
 import shutil 
 import re
 from werkzeug.utils import secure_filename
@@ -54,7 +53,7 @@ MAX_CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_VIDEOS = 6
-ALLOWED_EXTENSIONS = {'pdf', 'docx', 'zip', 'rar'}  
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'zip'}  
 
 pdf_file_path = ""
 
@@ -1086,6 +1085,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
