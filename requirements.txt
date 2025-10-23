@@ -2,38 +2,38 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.2.0+cpu
 
-# ---- Core Web App ----
-Flask==3.0.3
-flask-cors==4.0.0
-flask-limiter==3.6.0
-python-dotenv==1.0.1
-gunicorn==23.0.0
+# Flask stack
+Flask
+flask-cors
+flask-limiter
+gunicorn
+python-dotenv
 
-# ---- LangChain Stack (compatible with load_qa_chain) ----
-langchain==0.1.16
-langchain-core==0.1.53
-langchain-community==0.0.38
-langchain-huggingface==0.0.2
-langchain-google-genai==0.0.5
-google-generativeai==0.3.2
+# LangChain stack
+langchain
+langchain-core
+langchain-community
+langchain-huggingface
+langchain-google-genai
+google-generativeai
 
-# ---- Embeddings + Vector DB ----
-sentence-transformers==2.6.1
-faiss-cpu==1.7.4
+# LLM + Embedding
+sentence-transformers
+faiss-cpu
 
-# ---- Document Parsing ----
-PyPDF2==3.0.1
-python-docx==1.1.0
-beautifulsoup4==4.12.3
-markdown==3.6
-reportlab==4.2.2
-requests==2.31.0
-pydantic==1.10.13
+# Utilities
+requests
+beautifulsoup4
+markdown
+reportlab
+PyPDF2
+python-docx
+pydantic
 
-# ---- Optional (only if your app really needs these) ----
-youtube-transcript-api==0.6.2
-selenium==4.23.1
-webdriver-manager==4.0.2
-rarfile==4.1
-patool==2.3.0
-lxml==5.2.1
+# Optional features
+youtube-transcript-api
+selenium
+webdriver-manager
+rarfile
+patool
+lxml
