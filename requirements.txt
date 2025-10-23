@@ -10,9 +10,9 @@ gunicorn
 python-dotenv
 
 # LangChain stack
-langchain
-langchain-core
-langchain-community
+langchain==0.0.349
+langchain-core==0.0.13
+langchain-community==0.0.1
 langchain-huggingface
 langchain-google-genai
 google-generativeai
@@ -37,3 +37,4 @@ webdriver-manager
 rarfile
 patool
 lxml
+
