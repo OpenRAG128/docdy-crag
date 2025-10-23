@@ -1,27 +1,40 @@
+# Flask backend
 flask
 flask-cors
 python-dotenv
+
+# LangChain + Gemini
 langchain
-langchain-community
 langchain-core
+langchain-community
 langchain-huggingface
 langchain-google-genai
 google-generativeai
+
+# Embedding & Retrieval (CPU optimized)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.1+cpu
 sentence-transformers
-faiss-cpu
 transformers
 huggingface-hub
+faiss-cpu
+
+# Utilities
+numpy
+pydantic
+regex
+urllib3
+requests
+certifi
+
+# File handling
 PyPDF2
 python-docx
 reportlab
 markdown
 beautifulsoup4
 lxml
-requests
-numpy
-pydantic
-regex
-urllib3
-certifi
+
+# Optional APIs
 google-api-python-client
 isodate
