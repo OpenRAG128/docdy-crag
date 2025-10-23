@@ -4,7 +4,7 @@ flask-cors==4.0.0
 python-dotenv==1.0.1
 werkzeug==3.0.1
 
-# LangChain Stack - Use 0.1.x versions to avoid numpy conflict
+# LangChain Stack
 langchain==0.1.17
 langchain-core==0.1.53
 langchain-community==0.0.38
@@ -14,8 +14,8 @@ langchain-google-genai==1.0.1
 # Google AI
 google-generativeai==0.3.2
 
-# Embeddings - Compatible versions
-sentence-transformers==2.2.2
+# Embeddings - Updated to satisfy langchain-huggingface
+sentence-transformers==2.6.0
 huggingface-hub==0.23.0
 tokenizers==0.19.1
 transformers==4.40.1
@@ -41,7 +41,7 @@ rarfile==4.1
 reportlab==4.0.7
 markdown==3.5.1
 
-# Utils - Let pip resolve numpy automatically
+# Utils
 pydantic==2.5.0
 regex==2023.12.25
 urllib3==2.0.0
