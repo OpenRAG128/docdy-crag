@@ -29,6 +29,7 @@ reportlab
 PyPDF2
 python-docx
 pydantic
+numpy<2.0
 
 # Optional features
 youtube-transcript-api
@@ -37,5 +38,6 @@ webdriver-manager
 rarfile
 patool
 lxml
+
 
 
