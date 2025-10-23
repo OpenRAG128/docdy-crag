@@ -48,6 +48,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
 
 
+#configs setup here
 # Configuration constants
 MAX_CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
@@ -1085,6 +1086,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
