@@ -1,24 +1,16 @@
-# ---- Lightweight CPU build ----
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.2.0+cpu
-
 # Flask stack
 Flask
 flask-cors
-flask-limiter
 gunicorn
 python-dotenv
 
-# LangChain stack
+# LangChain stack (now much lighter)
 langchain
-langchain-core
 langchain-community
-langchain-huggingface
 langchain-google-genai
 google-generativeai
 
-# LLM + Embedding
-sentence-transformers
+# Vector store
 faiss-cpu
 
 # Utilities
@@ -30,14 +22,7 @@ PyPDF2
 python-docx
 pydantic
 numpy<2.0
+lxml
 
 # Optional features
 youtube-transcript-api
-selenium
-webdriver-manager
-rarfile
-patool
-lxml
-
-
-
