@@ -20,7 +20,6 @@ from urllib.parse import urlparse
 from functools import lru_cache
 from langchain_community.document_loaders import WebBaseLoader
 import zipfile
-import rarfile
 import shutil 
 import re
 from werkzeug.utils import secure_filename
@@ -1075,6 +1074,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
