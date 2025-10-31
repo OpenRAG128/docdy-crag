@@ -19,8 +19,6 @@ import tempfile
 from urllib.parse import urlparse
 from functools import lru_cache
 from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.document_loaders import SeleniumURLLoader
-from selenium.common.exceptions import WebDriverException
 import zipfile
 import rarfile
 import shutil 
@@ -374,9 +372,6 @@ def download_file(url):
                 return 'docx', response.content
             elif 'zip' in content_type or url.lower().endswith('.zip'):
                 return 'zip', response.content
-            elif 'rar' in content_type or url.lower().endswith('.rar'):
-                return 'rar', response.content
-            
             if response.content.startswith(b'%PDF-'):
                 return 'pdf', response.content
                 
@@ -394,12 +389,6 @@ def process_url_file(url):
         loader = WebBaseLoader(url)
         docs = loader.load()
         text = "\n".join(doc.page_content for doc in docs)
-        
-        # If no text, try Selenium
-        if not text.strip():
-            loader = SeleniumURLLoader(urls=[url])
-            docs = loader.load()
-            text = "\n".join(doc.page_content for doc in docs)
         
         # If still no text, try direct download and file processing
         if not text.strip():
@@ -1086,6 +1075,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
