@@ -3,7 +3,7 @@ from flask import Flask, request, session, url_for, redirect, jsonify, send_file
 from PyPDF2 import PdfReader
 from docx import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import load_qa_chain
 from langchain_core.prompts import PromptTemplate
@@ -435,9 +435,9 @@ def cleanup(response):
 
 @lru_cache(maxsize=1)
 def get_embeddings():
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",
-        model_kwargs={'device': "cpu"}
+    return GoogleGenerativeAIEmbeddings(
+        model="models/embedding-001", 
+        google_api_key=GOOGLE_API_KEY
     )
 
 def get_docx_text(docx_file):
@@ -1086,6 +1086,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
