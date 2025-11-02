@@ -424,7 +424,7 @@ def cleanup(response):
 @lru_cache(maxsize=1)
 def get_embeddings():
     return GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001", 
+        model="models/text-embedding-004", 
         google_api_key=GOOGLE_API_KEY
     )
 
@@ -1074,6 +1074,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
