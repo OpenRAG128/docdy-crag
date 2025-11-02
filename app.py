@@ -3,7 +3,7 @@ from flask import Flask, request, session, url_for, redirect, jsonify, send_file
 from PyPDF2 import PdfReader
 from docx import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
 from langchain_core.prompts import PromptTemplate
@@ -420,14 +420,25 @@ def allowed_file(filename):
 def cleanup(response):
     gc.collect()
     return response
-
+    
 @lru_cache(maxsize=1)
 def get_embeddings():
-    return GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004", 
-        google_api_key=GOOGLE_API_KEY
-    )
+    # Use a free, local model from Hugging Face
+    model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    model_kwargs = {'device': 'cpu'} # Use CPU
+    encode_kwargs = {'normalize_embeddings': False}
 
+    print("Loading local embedding model...") # Added for logging
+    
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs=model_kwargs,
+        encode_kwargs=encode_kwargs
+    )
+    
+    print("Local embedding model loaded.") # Added for logging
+    return embeddings
+    
 def get_docx_text(docx_file):
     """Extract text from DOCX file"""
     try:
@@ -1074,6 +1085,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
