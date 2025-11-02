@@ -9,6 +9,7 @@ langchain-core
 langchain-community
 langchain-google-genai
 google-generativeai
+sentence-transformers
 
 
 faiss-cpu~=1.7.4
@@ -26,3 +27,4 @@ lxml~=5.1.0
 
 
 youtube-transcript-api~=0.6.0
+
