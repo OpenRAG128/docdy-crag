@@ -524,7 +524,7 @@ def get_qa_chain():
     Question: \n{question}\n
     Answer:
     """
-    model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GOOGLE_API_KEY,
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GOOGLE_API_KEY,
                                  temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
@@ -696,7 +696,7 @@ def user_ip(user_question, persona):
 
         # STEP 7: Initial Answer
         prompt = PromptTemplate(template=system_prompt, input_variables=["context", "question"])
-        model = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GOOGLE_API_KEY,
+        model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GOOGLE_API_KEY,
                                      temperature=0.3)
         chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
         response = chain({"input_documents": filtered_docs, "question": user_question}, return_only_outputs=True)
@@ -1085,6 +1085,7 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
 
 
 
