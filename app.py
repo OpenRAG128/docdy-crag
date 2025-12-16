@@ -33,7 +33,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Flowable
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT
 from flask_cors import CORS
-import asyncio  # <--- CRITICAL IMPORT ADDED
+import asyncio
+import nest_asyncio # <--- NEW IMPORT
+
+# <--- CRITICAL FIX: Patch the event loop for Gunicorn/Threads --->
+nest_asyncio.apply()
+# <--------------------------------------------------------------->
 
 logging.basicConfig(level=logging.INFO)
 
@@ -194,13 +199,6 @@ def create_mindmap_pdf(markdown_content, output_path):
 def create_mindmap_markdown(text):
     """Generate mindmap markdown using Gemini AI."""
     try:
-        # --- FIX: Ensure Event Loop Exists ---
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-        # -------------------------------------
-
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = """
@@ -541,13 +539,6 @@ def get_qa_chain():
 def get_additional_info(query):
     """Get additional information from Gemini for the query"""
     try:
-        # --- FIX: Ensure Event Loop Exists ---
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-        # -------------------------------------
-
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Craft a prompt that encourages complementary information
@@ -573,13 +564,6 @@ def get_additional_info(query):
 
 def user_ip(user_question, persona, index_path="faiss_index"):
     try:
-        # --- FIX: Ensure Event Loop Exists (Main Loop for Gunicorn) ---
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-        # -----------------------------------------------------------
-
         embeddings = get_embeddings()
         
         # Critical Check: Ensure the index exists at the specific path
@@ -697,13 +681,6 @@ def verify_answer(context, question, initial_answer):
     Corrected Answer: <your improved answer here>
     """
     try:
-        # --- FIX: Ensure Event Loop Exists ---
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-        # -------------------------------------
-
         model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         return response.text.strip()
