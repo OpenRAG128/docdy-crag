@@ -431,7 +431,7 @@ def get_embeddings():
     # Use a free, local model from Hugging Face
     model_name = "sentence-transformers/all-MiniLM-L6-v2"
     model_kwargs = {'device': 'cpu'} # Use CPU
-    encode_kwargs = {'normalize_embeddings': True}
+    encode_kwargs = {'normalize_embeddings': False}
 
     print("Loading local embedding model...") # Added for logging
     
@@ -536,36 +536,27 @@ def get_qa_chain():
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
-def get_additional_info(topic_content):
-    """Get additional information from Gemini based on the answer content"""
+def get_additional_info(query):
+    """Get additional information from Gemini for the query"""
     try:
-        # Ensure Event Loop Exists
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # CHANGED: Prompt now asks for info based on the CONTENT provided
+        # Craft a prompt that encourages complementary information
         enhanced_prompt = f"""
-        You are a helpful expert assistant. 
-        Analyze the following text which describes a specific technical topic:
-        
-        "{topic_content}"
-        
-        Based ONLY on the specific technical concepts mentioned above (not the general style of the text), 
-        provide 4 distinct, high-value insights in plain text (no markdown, no bullets):
-        1. Recent real-world developments in this specific field.
-        2. A concrete practical application.
-        3. A related competing technology or concept.
-        4. A best practice for implementation.
-        
-        Keep it concise, dense, and directly relevant to the specific topic.
+        You are a helpful assistant. Based on the following content, provide additional relevant information in plain text with no markdown symbols, no bullet points, and no formatting characters like '*', '-', or '**'.
+        Topic:
+        {query}
+        Cover the following in plain text:
+        1. Recent developments or updates
+        2. Common practical applications
+        3. Related concepts or technologies
+        4. Expert insights or best practices
+        Write clearly and concisely in paragraph format.
         """
+
         
         response = model.generate_content(enhanced_prompt)
-        return response.text.strip()
+        return response.text
     except Exception as e:
         logging.error(f"Error getting additional information: {e}")
         return None
@@ -573,13 +564,6 @@ def get_additional_info(topic_content):
 
 def user_ip(user_question, persona, index_path="faiss_index"):
     try:
-        # --- FIX: Ensure Event Loop Exists (Main Loop for Gunicorn) ---
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
-        # -----------------------------------------------------------
-
         embeddings = get_embeddings()
         
         # Critical Check: Ensure the index exists at the specific path
@@ -588,38 +572,35 @@ def user_ip(user_question, persona, index_path="faiss_index"):
 
         # Load from the specific unique path
         new_db = FAISS.load_local(index_path, embeddings=embeddings, allow_dangerous_deserialization=True)
-        
-        # INCREASED K: Fetch more chunks to ensure we catch the Abstract/Intro
-        results = new_db.similarity_search_with_score(user_question, k=10)
+        results = new_db.similarity_search_with_score(user_question, k=8)
 
-        # STEP 1: Relaxed Thresholds (0.45 was too strict for L2 distance)
-        # With normalized embeddings, 0.8 is a good 'relevance' cutoff.
-        default_threshold = 0.85
+        # STEP 1: Threshold logic (adaptive based on persona)
         persona_thresholds = {
-            "Researcher": 0.80, # Stricter
-            "Student": 0.90,    # Looser (allow more broad context)
-            "Developer": 0.85,
-            "Teacher": 0.85,
-            "Policy Maker": 0.85,
-            "Working Professional": 0.85,
-            "Product Manager": 0.85,
-            "Startup Founder": 0.85,
-            "Investor": 0.85
+            "Researcher": 0.60,
+            "Developer": 0.55,
+            "Student": 0.45,
+            "Teacher": 0.45,
+            "Policy Maker": 0.45,
+            "Working Professional": 0.50,
+            "Product Manager": 0.50,
+            "Startup Founder": 0.50,
+            "Investor": 0.50
         }
-        threshold = persona_thresholds.get(persona, default_threshold)
+        threshold = persona_thresholds.get(persona, 0.45)
 
-        # STEP 2: Filter results based on threshold
+        # STEP 2: Initial filtering
         filtered_docs = [doc for doc, score in results if score < threshold]
 
-        # STEP 3: Fallback - Always ensure we have at least top 4 docs for "Summary" queries
-        # This prevents "Silence" if the vector score is slightly off.
-        if len(filtered_docs) < 4:
-            filtered_docs = [doc for doc, _ in results[:4]]
+        # STEP 3: Smart fallback if context too small
+        if len(filtered_docs) < 2:
+            # Add back top 2 even if above threshold
+            extras = [doc for doc, _ in results[:2] if doc not in filtered_docs]
+            filtered_docs.extend(extras)
 
-        # STEP 4: Add back docs with critical keywords (biasing) - Optional but good
-        keywords = ["abstract", "introduction", "conclusion", "summary", "problem"]
+        # STEP 4: Add back docs with critical keywords (biasing)
+        keywords = ["zero-sum", "Lagrangian", "potential game", "constrained optimization"]
         for doc, score in results:
-            if any(keyword in doc.page_content.lower() for keyword in keywords):
+            if any(keyword in doc.page_content for keyword in keywords):
                 if doc not in filtered_docs:
                     filtered_docs.append(doc)
 
@@ -642,7 +623,8 @@ def user_ip(user_question, persona, index_path="faiss_index"):
         system_prompt = f"""
         {persona_instructions.get(persona, '')}
 
-        Use the context below to provide an answer.
+        Start by briefly explaining what the topic is in simple terms (if applicable).
+        Then use the context below to provide an answer.
         If the answer isn't in the context, say:
         "Answer is not there within the context."
 
@@ -657,25 +639,17 @@ def user_ip(user_question, persona, index_path="faiss_index"):
                                      temperature=0.3)
         chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
         response = chain({"input_documents": filtered_docs, "question": user_question}, return_only_outputs=True)
-        initial_answer = response["output_text"].strip()
+        initial_answer = response["output_text"]
 
-        # STEP 8: CRAG Verification (Disabled for speed/stability as requested)
-        # verification = verify_answer(context_text, user_question, initial_answer)
-        # if "VALID" in verification:
-        final_answer = initial_answer
-        # else:
-        #     final_answer = extract_corrected_version(verification)
-
-        # STEP 9: SMART Additional Info
-        # Logic: If the answer is missing, generate info from the CONTEXT (the chunks we found),
-        # otherwise generate info from the ANSWER.
-        if "Answer is not there" in final_answer or len(final_answer) < 20:
-            # Fallback: Generate insights from the document content itself
-            # We limit to 3000 chars to avoid token limits on the helper call
-            additional_info = get_additional_info(context_text[:3000]) 
+        # STEP 8: CRAG Verification
+        verification = verify_answer(context_text, user_question, initial_answer)
+        if "VALID" in verification:
+            final_answer = initial_answer
         else:
-            # Standard: Generate insights from the answer
-            additional_info = get_additional_info(final_answer)
+            final_answer = extract_corrected_version(verification)
+
+        # STEP 9: Optional insights
+        additional_info = get_additional_info(user_question)
 
         # STEP 10: Cleanup formatting
         cleaned_response = final_answer
@@ -687,9 +661,8 @@ def user_ip(user_question, persona, index_path="faiss_index"):
         return cleaned_response.strip(), filtered_docs, additional_info
 
     except Exception as e:
-        logging.error(f"user_ip error: {e}")
+        logging.error(f"user_ip CRAG++ error: {e}")
         return f"Error: {str(e)}", [], None
-        
 
 def verify_answer(context, question, initial_answer):
     prompt = f"""
@@ -1089,5 +1062,3 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
-
-
