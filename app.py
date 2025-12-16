@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from functools import lru_cache
 from langchain_community.document_loaders import WebBaseLoader
 import zipfile
-import shutil 
+import shutil
 import re
 from werkzeug.utils import secure_filename
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -37,7 +37,7 @@ from flask_cors import CORS
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', "6fK9P6WcfpBz7bWJ9qV2eP2Qv5dA8D8z")
 
 load_dotenv()
@@ -45,13 +45,12 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
 
 
-#configs setup here
 # Configuration constants
 MAX_CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_VIDEOS = 6
-ALLOWED_EXTENSIONS = {'pdf', 'docx', 'zip'}  
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'zip'}
 
 pdf_file_path = ""
 
@@ -495,18 +494,20 @@ def get_chunks(text):
     )
     return text_splitter.split_text(text)
 
-def get_vector_store(text_chunks):
+def get_vector_store(text_chunks, index_path="faiss_index"):
     try:
         # Create the directory if it doesn't exist
-        os.makedirs("faiss_index", exist_ok=True)
+        os.makedirs(index_path, exist_ok=True)
         
         embeddings = get_embeddings()
         vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
-        vector_store.save_local("faiss_index")
         
-        # Verify the index was created successfully
-        if not os.path.exists("faiss_index/index.faiss"):
-            logging.error("Failed to create FAISS index file")
+        # Save to the specific, unique path provided for this request
+        vector_store.save_local(index_path)
+        
+        # Verify the index was created successfully in that specific path
+        if not os.path.exists(f"{index_path}/index.faiss"):
+            logging.error(f"Failed to create FAISS index file at {index_path}")
             return False
         return True
     except Exception as e:
@@ -554,85 +555,17 @@ def get_additional_info(query):
         logging.error(f"Error getting additional information: {e}")
         return None
     
-# def user_ip(user_question, persona):
-#     try:
-#         embeddings = get_embeddings()
-#         new_db = FAISS.load_local("faiss_index", embeddings=embeddings, allow_dangerous_deserialization=True)
 
-#         # Step 1: Retrieve with scores
-#         try:
-#             results = new_db.similarity_search_with_score(user_question, k=8)
-#             threshold = 0.45
-#             filtered_docs = [doc for doc, score in results if score < threshold]
-
-#             # Fallback: use top 3 if none below threshold
-#             if not filtered_docs:
-#                 filtered_docs = [doc for doc, score in results[:3]]
-#         except Exception as e:
-#             logging.warning(f"Similarity score fallback due to: {e}")
-#             filtered_docs = new_db.similarity_search(user_question, k=5)
-
-#         # Step 2: Construct context
-#         context_text = "\n".join(doc.page_content for doc in filtered_docs)
-
-#         # Step 3: Persona-based system prompt
-#         persona_instructions = {
-#             "Student": "Explain in a simple, beginner-friendly way with relatable examples.",
-#             "Researcher": "Provide a technically deep explanation with references and advanced insights.",
-#             "Working Professional": "Focus on practicality, real-world application, and relevance to industry.",
-#             "Teacher": "Structure the answer clearly like a lesson plan or explanation for a classroom.",
-#             "Product Manager": "Frame the answer in terms of user value, business impact, and scalability.",
-#             "Startup Founder": "Highlight innovation, execution strategy, and competitive advantages.",
-#             "Developer": "Provide code-level insights, examples, and technical clarity.",
-#             "Policy Maker": "Consider regulatory and ethical implications with broader societal context.",
-#             "Investor": "Discuss ROI, market potential, business model implications, and trends."
-#         }
-
-#         system_prompt = f"""
-#         {persona_instructions.get(persona, '')}
-
-#         Use the context below to answer the question. If the answer isn't in the context, say:
-#         "Answer is not there within the context."
-
-#         Context: {{context}}
-#         Question: {{question}}
-#         Answer:
-#         """
-
-#         # Step 4: First pass (Initial answer)
-#         model = ChatGroq(model="gemma2-9b-it", groq_api_key=GROQ_API_KEY)
-#         prompt = PromptTemplate(template=system_prompt, input_variables=["context", "question"])
-#         chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
-#         response = chain({"input_documents": filtered_docs, "question": user_question}, return_only_outputs=True)
-#         initial_answer = response["output_text"]
-
-#         # Step 5: Verify the answer (Corrective RAG logic)
-#         verification = verify_answer(context_text, user_question, initial_answer)
-#         if "VALID" in verification:
-#             final_answer = initial_answer
-#         else:
-#             final_answer = extract_corrected_version(verification)
-
-#         # Step 6: Optional: Add extra insights
-#         additional_info = get_additional_info(user_question)
-
-#         # Step 7: Cleanup formatting
-#         cleaned_response = final_answer
-#         cleaned_response = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_response)
-#         cleaned_response = re.sub(r'\*(.*?)\*', r'\1', cleaned_response)
-#         cleaned_response = re.sub(r'^[-•]\s+', '', cleaned_response, flags=re.MULTILINE)
-#         cleaned_response = re.sub(r'\n{2,}', '\n\n', cleaned_response)
-
-#         return cleaned_response.strip(), filtered_docs, additional_info
-
-#     except Exception as e:
-#         logging.error(f"user_ip CRAG error: {e}")
-#         return f"Error: {str(e)}", [], None
-
-def user_ip(user_question, persona):
+def user_ip(user_question, persona, index_path="faiss_index"):
     try:
         embeddings = get_embeddings()
-        new_db = FAISS.load_local("faiss_index", embeddings=embeddings, allow_dangerous_deserialization=True)
+        
+        # Critical Check: Ensure the index exists at the specific path
+        if not os.path.exists(f"{index_path}/index.faiss"):
+             return "Error: No document context found for this request. Please upload documents with your question.", [], None
+
+        # Load from the specific unique path
+        new_db = FAISS.load_local(index_path, embeddings=embeddings, allow_dangerous_deserialization=True)
         results = new_db.similarity_search_with_score(user_question, k=8)
 
         # STEP 1: Threshold logic (adaptive based on persona)
@@ -724,7 +657,6 @@ def user_ip(user_question, persona):
     except Exception as e:
         logging.error(f"user_ip CRAG++ error: {e}")
         return f"Error: {str(e)}", [], None
-
 
 def verify_answer(context, question, initial_answer):
     prompt = f"""
@@ -1037,67 +969,90 @@ def generate_concepts():
         }), 500
 
     
-# Replace the index route with this fixed version:
 @app.route('/api/query', methods=['POST'])
 def android_query():
-    response = None
-    additional_info = None
-    recommendations = []
-    uploaded_filenames = []
+    # 1. ISOLATION: Create a unique temporary directory for this specific request
+    with tempfile.TemporaryDirectory() as temp_dir:
+        
+        unique_index_path = os.path.join(temp_dir, "temp_faiss_index")
+        
+        response = None
+        additional_info = None
+        recommendations = []
+        uploaded_filenames = []
+        
+        # Get Inputs
+        user_question = request.form.get('question', '').strip()
+        persona = request.form.get('persona', 'Student')
+        
+        # Get Files AND URLs
+        files = request.files.getlist('docs')
+        # Android should send URLs as a list of strings under the key 'urls'
+        # Example: multipart form field 'urls' = "https://example.com"
+        urls = request.form.getlist('urls') 
 
-    user_question = request.form.get('question', '').strip()
-    persona = request.form.get('persona', 'Student')
-    files = request.files.getlist('docs')
-
-    if files and any(file.filename for file in files):
         all_text = ""
-        for file in files:
-            if file and allowed_file(file.filename):
-                text = process_file(file)
-                all_text += text + "\n"
-                uploaded_filenames.append(file.filename)
 
+        # 2. PROCESS FILES
+        if files and any(file.filename for file in files):
+            for file in files:
+                if file and allowed_file(file.filename):
+                    text = process_file(file)
+                    if text:
+                        all_text += text + "\n"
+                        uploaded_filenames.append(file.filename)
+
+        # 3. PROCESS URLS (Added Feature)
+        if urls:
+            for url in urls:
+                # Basic check to avoid processing empty strings
+                if url.strip() and is_valid_url(url):
+                    try:
+                        text = process_url_file(url)
+                        if text:
+                            all_text += text + "\n"
+                            uploaded_filenames.append(url)
+                    except Exception as e:
+                        logging.error(f"Failed to process URL {url}: {e}")
+
+        # 4. BUILD KNOWLEDGE BASE
         if all_text.strip():
             text_chunks = get_chunks(all_text)
-            success = get_vector_store(text_chunks)
+            # Pass the UNIQUE path
+            success = get_vector_store(text_chunks, index_path=unique_index_path)
+            
             if not success:
                 return jsonify({
-                    "response": "Failed to create knowledge base from uploaded documents.",
+                    "response": "Failed to create knowledge base from content.",
                     "additional_info": None,
                     "recommendations": [],
                     "uploaded_filenames": uploaded_filenames
                 }), 500
+        else:
+            # If no content found in EITHER files or URLs
+            return jsonify({
+                "response": "Please provide a valid document or URL along with your question.",
+                "additional_info": None,
+                "recommendations": [],
+                "uploaded_filenames": []
+            }), 400
 
-    if user_question:
-        response, docs, additional_info = user_ip(user_question, persona)
-        if response and docs:
-            context_text = " ".join(doc.page_content for doc in docs)
-            video_query = f"{response} {context_text}".strip()
-            recommendations = get_video_recommendations(video_query)
+        # 5. GENERATE ANSWER
+        if user_question:
+            # Query the UNIQUE index
+            response, docs, additional_info = user_ip(user_question, persona, index_path=unique_index_path)
+            
+            if response and docs:
+                context_text = " ".join(doc.page_content for doc in docs)
+                video_query = f"{response} {context_text}".strip()
+                recommendations = get_video_recommendations(video_query)
 
-    return jsonify({    
-        "response": response,
-        "additional_info": additional_info,
-        "recommendations": recommendations,
-        "uploaded_filenames": uploaded_filenames
-    })
-
+        return jsonify({    
+            "response": response,
+            "additional_info": additional_info,
+            "recommendations": recommendations,
+            "uploaded_filenames": uploaded_filenames
+        })
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
