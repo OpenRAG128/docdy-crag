@@ -1,6 +1,8 @@
 # --- Torch CPU Optimization (Critical for fast deployment) ---
 --extra-index-url https://download.pytorch.org/whl/cpu
 
+nest-asyncio==1.6.0
+
 # --- Web Framework ---
 Flask~=3.0.0
 flask-cors~=4.0.0
@@ -32,3 +34,4 @@ youtube-transcript-api~=0.6.0
 # --- Constraints ---
 pydantic>=2.5.0,<3.0.0
 numpy<2.0.0
+
