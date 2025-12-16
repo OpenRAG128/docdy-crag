@@ -34,11 +34,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT
 from flask_cors import CORS
 import asyncio
-import nest_asyncio # <--- NEW IMPORT
 
-# <--- CRITICAL FIX: Patch the event loop for Gunicorn/Threads --->
-nest_asyncio.apply()
-# <--------------------------------------------------------------->
+# NOTE: nest_asyncio REMOVED to prevent 502 crashes
 
 logging.basicConfig(level=logging.INFO)
 
@@ -199,6 +196,13 @@ def create_mindmap_pdf(markdown_content, output_path):
 def create_mindmap_markdown(text):
     """Generate mindmap markdown using Gemini AI."""
     try:
+        # --- MANUAL EVENT LOOP FIX ---
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+        # -----------------------------
+
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = """
@@ -431,6 +435,7 @@ def get_embeddings():
     # Use a free, local model from Hugging Face
     model_name = "sentence-transformers/all-MiniLM-L6-v2"
     model_kwargs = {'device': 'cpu'} # Use CPU
+    # CRITICAL: Normalize to true for proper similarity search
     encode_kwargs = {'normalize_embeddings': True}
 
     print("Loading local embedding model...") # Added for logging
@@ -523,6 +528,13 @@ def get_vector_store(text_chunks, index_path="faiss_index"):
 
 @lru_cache(maxsize=1)
 def get_qa_chain():
+    # --- MANUAL EVENT LOOP FIX ---
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    # -----------------------------
+
     prompt_template = """ 
     Answer the question as detailed as possible from the provided context keeping the tone professional and 
     acting like an expert. If you don't know the answer, just say "Answer is not there within the context", 
@@ -539,6 +551,13 @@ def get_qa_chain():
 def get_additional_info(query):
     """Get additional information from Gemini for the query"""
     try:
+        # --- MANUAL EVENT LOOP FIX ---
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+        # -----------------------------
+
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Craft a prompt that encourages complementary information
@@ -682,6 +701,13 @@ def user_ip(user_question, persona, index_path="faiss_index"):
         
 
 def verify_answer(context, question, initial_answer):
+    # --- MANUAL EVENT LOOP FIX ---
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    # -----------------------------
+
     prompt = f"""
     You are a helpful AI that verifies whether a given answer is accurate and complete based on a provided context and question.
 
@@ -1079,4 +1105,4 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
-
+    
