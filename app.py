@@ -536,27 +536,36 @@ def get_qa_chain():
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
-def get_additional_info(query):
-    """Get additional information from Gemini for the query"""
+def get_additional_info(topic_content):
+    """Get additional information from Gemini based on the answer content"""
     try:
+        # Ensure Event Loop Exists
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # Craft a prompt that encourages complementary information
+        # CHANGED: Prompt now asks for info based on the CONTENT provided
         enhanced_prompt = f"""
-        You are a helpful assistant. Based on the following content, provide additional relevant information in plain text with no markdown symbols, no bullet points, and no formatting characters like '*', '-', or '**'.
-        Topic:
-        {query}
-        Cover the following in plain text:
-        1. Recent developments or updates
-        2. Common practical applications
-        3. Related concepts or technologies
-        4. Expert insights or best practices
-        Write clearly and concisely in paragraph format.
+        You are a helpful expert assistant. 
+        Analyze the following text which describes a specific technical topic:
+        
+        "{topic_content}"
+        
+        Based ONLY on the specific technical concepts mentioned above (not the general style of the text), 
+        provide 4 distinct, high-value insights in plain text (no markdown, no bullets):
+        1. Recent real-world developments in this specific field.
+        2. A concrete practical application.
+        3. A related competing technology or concept.
+        4. A best practice for implementation.
+        
+        Keep it concise, dense, and directly relevant to the specific topic.
         """
-
         
         response = model.generate_content(enhanced_prompt)
-        return response.text
+        return response.text.strip()
     except Exception as e:
         logging.error(f"Error getting additional information: {e}")
         return None
@@ -564,6 +573,13 @@ def get_additional_info(query):
 
 def user_ip(user_question, persona, index_path="faiss_index"):
     try:
+        # --- FIX: Ensure Event Loop Exists (Main Loop for Gunicorn) ---
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+        # -----------------------------------------------------------
+
         embeddings = get_embeddings()
         
         # Critical Check: Ensure the index exists at the specific path
@@ -623,8 +639,7 @@ def user_ip(user_question, persona, index_path="faiss_index"):
         system_prompt = f"""
         {persona_instructions.get(persona, '')}
 
-        Start by briefly explaining what the topic is in simple terms (if applicable).
-        Then use the context below to provide an answer.
+        Use the context below to provide an answer.
         If the answer isn't in the context, say:
         "Answer is not there within the context."
 
@@ -648,8 +663,8 @@ def user_ip(user_question, persona, index_path="faiss_index"):
         else:
             final_answer = extract_corrected_version(verification)
 
-        # STEP 9: Optional insights
-        additional_info = get_additional_info(user_question)
+        # STEP 9: Optional insights (Now based on the ANSWER, not the Question)
+        additional_info = get_additional_info(final_answer)
 
         # STEP 10: Cleanup formatting
         cleaned_response = final_answer
@@ -663,6 +678,7 @@ def user_ip(user_question, persona, index_path="faiss_index"):
     except Exception as e:
         logging.error(f"user_ip CRAG++ error: {e}")
         return f"Error: {str(e)}", [], None
+
 
 def verify_answer(context, question, initial_answer):
     prompt = f"""
@@ -1062,3 +1078,4 @@ def android_query():
 
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
+
