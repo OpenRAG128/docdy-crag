@@ -357,33 +357,40 @@ def is_valid_url(url):
         return False
 
 def download_file(url):
-    """Download file from URL with enhanced error handling and academic paper support"""
+    """Universal Downloader: Handles PDFs, DOCX, ZIPs with browser headers"""
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'application/pdf,*/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://www.google.com/'
     }
     
     try:
-        if 'arxiv.org' in url:
+        # Special handling for Arxiv
+        if 'arxiv.org' in url and 'abs' in url:
             url = url.replace('abs', 'pdf')
-            if not url.endswith('.pdf'):
-                url = url + '.pdf'
+        if 'arxiv.org' in url and not url.endswith('.pdf'):
+            url += '.pdf'
         
-        response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+        # verify=False fixes SSL errors on Azure
+        response = requests.get(url, headers=headers, timeout=30, allow_redirects=True, verify=False)
         
         if response.status_code == 200:
             content_type = response.headers.get('content-type', '').lower()
             
-            if 'pdf' in content_type or url.lower().endswith('.pdf'):
+            # Smart detection based on Content-Type header
+            if 'application/pdf' in content_type or url.lower().endswith('.pdf') or response.content.startswith(b'%PDF-'):
                 return 'pdf', response.content
-            elif 'docx' in content_type or url.lower().endswith('.docx'):
+            elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or url.lower().endswith('.docx'):
                 return 'docx', response.content
-            elif 'zip' in content_type or url.lower().endswith('.zip'):
+            elif 'application/zip' in content_type or 'application/x-zip-compressed' in content_type or url.lower().endswith('.zip'):
                 return 'zip', response.content
-            if response.content.startswith(b'%PDF-'):
-                return 'pdf', response.content
+            elif 'application/octet-stream' in content_type:
+                # Binary fallback: inspect magic numbers
+                if response.content.startswith(b'%PDF-'): return 'pdf', response.content
+                if response.content.startswith(b'PK\x03\x04'): return 'docx', response.content # DOCX is technically a ZIP
                 
-        logging.error(f"Download failed for {url}. Status: {response.status_code}")
+        logging.error(f"Download failed or unknown format for {url}. Status: {response.status_code}, Type: {response.headers.get('content-type')}")
         return None, None
         
     except Exception as e:
@@ -391,62 +398,93 @@ def download_file(url):
         return None, None
 
 def process_url_file(url):
-    """Enhanced URL processing with Browser Headers (Fixes 403 Forbidden)"""
+    """
+    Dynamic URL Processor:
+    1. Tries to scrape as a webpage (HTML) first using Browser Spoofing.
+    2. If that yields no text, it assumes it's a binary file (PDF/DOCX) and downloads it.
+    """
+    logging.info(f"Processing URL: {url}")
     text = ""
+    # Heavy-duty headers to look exactly like Chrome on Windows
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Upgrade-Insecure-Requests': '1'
+    }
+
     try:
-        # Define browser headers to avoid being blocked by Wikipedia/etc.
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-
-        # 1. Try WebBaseLoader with Headers
+        # STRATEGY 1: Treat as a Web Page (Manual Scraping)
+        # We try this first because it is faster than downloading files
         try:
-            # Note: We pass verify_ssl=False to avoid strict SSL errors on some servers
-            loader = WebBaseLoader(url, header_template=headers, verify_ssl=False)
-            docs = loader.load()
-            text = "\n".join(doc.page_content for doc in docs)
-        except Exception as loader_error:
-            logging.warning(f"WebBaseLoader failed for {url}: {loader_error}")
-            # Don't give up yet, try fallbacks below
+            logging.info("Attempting Strategy 1: Smart Scraping...")
+            response = requests.get(url, headers=headers, timeout=20, verify=False)
+            
+            # Only process if it looks like HTML
+            content_type = response.headers.get('content-type', '').lower()
+            if response.status_code == 200 and 'text/html' in content_type:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Cleanup: Remove navigation, ads, scripts, footers
+                for junk in soup(["script", "style", "nav", "footer", "header", "aside", "noscript", "iframe"]):
+                    junk.decompose()
+                
+                # Extract text with nice spacing
+                text = soup.get_text(separator=' ', strip=True)
+                
+                # Validation: Did we actually get content?
+                if len(text) > 100:
+                    logging.info(f"Strategy 1 Success: Scraped {len(text)} chars from HTML")
+                    return text
+                else:
+                    logging.warning("Strategy 1 result was too short, trying file download...")
+        except Exception as e:
+            logging.warning(f"Strategy 1 failed: {e}")
 
-        # 2. Fallback: Manual Download (for PDFs, DOCX, or stubborn HTML)
+        # STRATEGY 2: Treat as a File (PDF/DOCX/ZIP)
+        # If scraping failed or returned nothing, it might be a PDF link disguised as a URL
         if not text.strip():
-            # Try downloading the file directly
+            logging.info("Attempting Strategy 2: File Download...")
             file_type, content = download_file(url)
             
             if content:
                 with tempfile.TemporaryDirectory() as temp_dir:
                     temp_file = os.path.join(temp_dir, f"temp.{file_type}")
-                    with open(temp_file, 'wb') as f:
+                    with open(temp_file, 'wb') as f: 
                         f.write(content)
                     
-                    if file_type in ['zip', 'rar']:
-                        text = process_compressed_file(temp_file, temp_dir)
-                    elif file_type == 'pdf':
-                        with open(temp_file, 'rb') as f:
-                            text = get_pdf_text(f)
-                    elif file_type == 'docx':
+                    if file_type == 'pdf':
+                        with open(temp_file, 'rb') as f: text = get_pdf_text(f)
+                    elif file_type == 'docx': 
                         text = get_docx_text(temp_file)
-            
-            # 3. Final Fallback: Manual HTML Scraping (if WebBaseLoader failed)
-            if not text.strip():
-                try:
-                    response = requests.get(url, headers=headers, timeout=10)
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        # Remove scripts and styles to clean up text
-                        for script in soup(["script", "style"]):
-                            script.decompose()
-                        text = soup.get_text(separator=' ', strip=True)
-                except Exception as e:
-                    logging.error(f"Manual scraping failed: {e}")
+                    elif file_type == 'zip':
+                        text = process_compressed_file(temp_file, temp_dir)
+                    
+                    if len(text) > 50:
+                        logging.info(f"Strategy 2 Success: Extracted {len(text)} chars from {file_type.upper()}")
+                        return text
 
-        return text or ""
-        
+        # STRATEGY 3: Last Resort (WebBaseLoader)
+        # Sometimes LangChain handles edge cases better (like Javascript-heavy sites)
+        if not text.strip():
+            logging.info("Attempting Strategy 3: WebBaseLoader Fallback...")
+            try:
+                loader = WebBaseLoader(url, header_template=headers, verify_ssl=False)
+                docs = loader.load()
+                text = "\n".join(d.page_content for d in docs)
+            except Exception as e:
+                logging.warning(f"Strategy 3 failed: {e}")
+
+        if not text.strip():
+            logging.error(f"FATAL: Could not extract content from {url} using any method.")
+            return ""
+            
+        return text
+
     except Exception as e:
-        logging.error(f"Comprehensive URL processing error: {e}")
+        logging.error(f"Critical error processing URL {url}: {e}")
         return ""
-    
+        
     
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -1132,4 +1170,5 @@ def android_query():
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
     
+
 
