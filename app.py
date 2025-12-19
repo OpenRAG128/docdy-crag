@@ -1100,12 +1100,17 @@ def android_query():
         
         # Get Files AND URLs
         files = request.files.getlist('docs')
-        # Android should send URLs as a list of strings under the key 'urls'
-        # Example: multipart form field 'urls' = "https://example.com"
-        urls = request.form.getlist('urls') 
-
+        
+        # CHANGED: Handle URLs as single field that might contain comma-separated values
+        urls_input = request.form.get('urls', '').strip()
+        urls = []
+        if urls_input:
+            # CHANGED: Split by comma, newline, or semicolon and validate each URL
+            urls = [u.strip() for u in re.split(r'[,;\n]+', urls_input) if u.strip()]
+            logging.info(f"Parsed URLs: {urls}")  # CHANGED: Added logging for debugging
+        
         all_text = ""
-
+        
         # 2. PROCESS FILES
         if files and any(file.filename for file in files):
             for file in files:
@@ -1114,20 +1119,29 @@ def android_query():
                     if text:
                         all_text += text + "\n"
                         uploaded_filenames.append(file.filename)
-
+        
         # 3. PROCESS URLS (Added Feature)
         if urls:
             for url in urls:
-                # Basic check to avoid processing empty strings
-                if url.strip() and is_valid_url(url):
-                    try:
-                        text = process_url_file(url)
-                        if text:
-                            all_text += text + "\n"
-                            uploaded_filenames.append(url)
-                    except Exception as e:
-                        logging.error(f"Failed to process URL {url}: {e}")
-
+                # CHANGED: Added more detailed validation and logging
+                if not is_valid_url(url):
+                    logging.warning(f"Invalid URL format: {url}")  # CHANGED
+                    continue
+                
+                try:
+                    logging.info(f"Processing URL: {url}")  # CHANGED: Added before processing
+                    text = process_url_file(url)
+                    
+                    if text and len(text.strip()) > 50:  # CHANGED: Added length check
+                        all_text += text + "\n"
+                        uploaded_filenames.append(url)
+                        logging.info(f"Successfully extracted {len(text)} chars from {url}")  # CHANGED
+                    else:
+                        logging.warning(f"No content extracted from {url}")  # CHANGED
+                        
+                except Exception as e:
+                    logging.error(f"Failed to process URL {url}: {e}")
+        
         # 4. BUILD KNOWLEDGE BASE
         if all_text.strip():
             text_chunks = get_chunks(all_text)
@@ -1149,7 +1163,7 @@ def android_query():
                 "recommendations": [],
                 "uploaded_filenames": []
             }), 400
-
+        
         # 5. GENERATE ANSWER
         if user_question:
             # Query the UNIQUE index
@@ -1159,7 +1173,7 @@ def android_query():
                 context_text = " ".join(doc.page_content for doc in docs)
                 video_query = f"{response} {context_text}".strip()
                 recommendations = get_video_recommendations(video_query)
-
+        
         return jsonify({    
             "response": response,
             "additional_info": additional_info,
@@ -1167,8 +1181,10 @@ def android_query():
             "uploaded_filenames": uploaded_filenames
         })
 
+
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
     
+
 
 
