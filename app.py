@@ -391,16 +391,29 @@ def download_file(url):
         return None, None
 
 def process_url_file(url):
-    """Enhanced URL file processing with multiple fallback methods"""
+    """Enhanced URL processing with Browser Headers (Fixes 403 Forbidden)"""
+    text = ""
     try:
-        # First, try WebBaseLoader
-        loader = WebBaseLoader(url)
-        docs = loader.load()
-        text = "\n".join(doc.page_content for doc in docs)
-        
-        # If still no text, try direct download and file processing
+        # Define browser headers to avoid being blocked by Wikipedia/etc.
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+
+        # 1. Try WebBaseLoader with Headers
+        try:
+            # Note: We pass verify_ssl=False to avoid strict SSL errors on some servers
+            loader = WebBaseLoader(url, header_template=headers, verify_ssl=False)
+            docs = loader.load()
+            text = "\n".join(doc.page_content for doc in docs)
+        except Exception as loader_error:
+            logging.warning(f"WebBaseLoader failed for {url}: {loader_error}")
+            # Don't give up yet, try fallbacks below
+
+        # 2. Fallback: Manual Download (for PDFs, DOCX, or stubborn HTML)
         if not text.strip():
+            # Try downloading the file directly
             file_type, content = download_file(url)
+            
             if content:
                 with tempfile.TemporaryDirectory() as temp_dir:
                     temp_file = os.path.join(temp_dir, f"temp.{file_type}")
@@ -414,7 +427,20 @@ def process_url_file(url):
                             text = get_pdf_text(f)
                     elif file_type == 'docx':
                         text = get_docx_text(temp_file)
-        
+            
+            # 3. Final Fallback: Manual HTML Scraping (if WebBaseLoader failed)
+            if not text.strip():
+                try:
+                    response = requests.get(url, headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        # Remove scripts and styles to clean up text
+                        for script in soup(["script", "style"]):
+                            script.decompose()
+                        text = soup.get_text(separator=' ', strip=True)
+                except Exception as e:
+                    logging.error(f"Manual scraping failed: {e}")
+
         return text or ""
         
     except Exception as e:
@@ -1106,3 +1132,4 @@ def android_query():
 if __name__ == '__main__':
      app.run(debug=os.getenv("FLASK_DEBUG", False), threaded=True, host="0.0.0.0")
     
+
